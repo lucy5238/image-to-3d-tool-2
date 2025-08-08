@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图像转3D建模工具</title>
+    <!-- 引入外部资源 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Tailwind配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        accent: '#722ED1',
+                        neutral: '#1F2937',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .step-active { @apply bg-primary text-white border-primary; }
+            .step-completed { @apply bg-green-500 text-white border-green-500; }
+            .step-pending { @apply bg-gray-200 text-gray-500 border-gray-300; }
+            .transition-all-300 { @apply transition-all duration-300 ease-in-out; }
+        }
+    </style>
+</head>
+<body class="font-inter bg-gray-50 text-neutral min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-cube text-primary text-2xl"></i>
+                <h1 class="text-xl font-bold text-primary">图像转3D建模工具</h1>
+            </div>
+            <nav class="hidden md:flex">
+                <ul class="flex space-x-6">
+                    <li><a href="#" class="text-gray-600 hover:text-primary transition-all-300">首页</a></li>
+                    <li><a href="#" class="text-gray-600 hover:text-primary transition-all-300">使用指南</a></li>
+                    <li><a href="https://docs.blender.org/api/4.0/" target="_blank" class="text-gray-600 hover:text-primary transition-all-300">Blender API文档</a></li>
+                </ul>
+            </nav>
+            <div class="flex items-center space-x-3">
+                <!-- 添加Blender连接按钮 -->
+                <button id="connect-blender-btn" class="hidden md:flex items-center bg-secondary hover:bg-secondary/90 text-white px-4 py-2 rounded-lg transition-all-300">
+                    <i class="fa fa-plug mr-2"></i>连接Blender
+                </button>
+                <button class="md:hidden text-gray-600">
+                    <i class="fa fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <!-- 步骤指示器 -->
+        <div class="mb-10 overflow-x-auto pb-2">
+            <div class="flex justify-between items-center min-w-max">
+                <div class="flex flex-col items-center w-32">
+                    <div class="w-10 h-10 rounded-full border-2 step-active flex items-center justify-center mb-2">
+                        <i class="fa fa-upload"></i>
+                    </div>
+                    <span class="text-sm font-medium text-center">上传图像</span>
+                </div>
+                <div class="flex-1 h-1 mx-2 bg-gray-200 relative min-w-[40px]">
+                    <div id="progress-1-2" class="absolute top-0 left-0 h-full bg-primary w-0 transition-all-300"></div>
+                </div>
+                <div class="flex flex-col items-center w-32">
+                    <div class="w-10 h-10 rounded-full border-2 step-pending flex items-center justify-center mb-2">
+                        <i class="fa fa-cogs"></i>
+                    </div>
+                    <span class="text-sm font-medium text-center">分析图像</span>
+                </div>
+                <div class="flex-1 h-1 mx-2 bg-gray-200 relative min-w-[40px]">
+                    <div id="progress-2-3" class="absolute top-0 left-0 h-full bg-primary w-0 transition-all-300"></div>
+                </div>
+                <div class="flex flex-col items-center w-32">
+                    <div class="w-10 h-10 rounded-full border-2 step-pending flex items-center justify-center mb-2">
+                        <i class="fa fa-comments"></i>
+                    </div>
+                    <span class="text-sm font-medium text-center">交互确认</span>
+                </div>
+                <div class="flex-1 h-1 mx-2 bg-gray-200 relative min-w-[40px]">
+                    <div id="progress-3-4" class="absolute top-0 left-0 h-full bg-primary w-0 transition-all-300"></div>
+                </div>
+                <div class="flex flex-col items-center w-32">
+                    <div class="w-10 h-10 rounded-full border-2 step-pending flex items-center justify-center mb-2">
+                        <i class="fa fa-eye"></i>
+                    </div>
+                    <span class="text-sm font-medium text-center">3D预览</span>
+                </div>
+                <div class="flex-1 h-1 mx-2 bg-gray-200 relative min-w-[40px]">
+                    <div id="progress-4-5" class="absolute top-0 left-0 h-full bg-primary w-0 transition-all-300"></div>
+                </div>
+                <div class="flex flex-col items-center w-32">
+                    <div class="w-10 h-10 rounded-full border-2 step-pending flex items-center justify-center mb-2">
+                        <i class="fa fa-code"></i>
+                    </div>
+                    <span class="text-sm font-medium text-center">导出代码</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 步骤内容区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左侧面板 -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- 图像上传区域 -->
+                <div id="step-upload" class="bg-white rounded-xl p-6 shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fa fa-upload text-primary mr-2"></i>上传图像
+                    </h2>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary transition-all-300 cursor-pointer" id="drop-area">
+                        <i class="fa fa-file-image-o text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-gray-500 mb-2">拖放图像到此处，或点击上传</p>
+                        <p class="text-sm text-gray-400">支持 PNG, JPG, SVG 格式</p>
+                        <input type="file" id="file-input" class="hidden" accept="image/*">
+                        <label for="file-input" class="mt-4 bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-lg transition-all-300 inline-block cursor-pointer">
+                            选择图像
+                        </label>
+                    </div>
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">图像类型</label>
+                        <select id="image-type" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
+                            <option value="flowchart">流程图</option>
+                            <option value="process">工艺图</option>
+                            <option value="mindmap">脑图</option>
+                            <option value="engineering">工程图</option>
+                        </select>
+                    </div>
+                    <div class="mt-6">
+                        <button id="analyze-btn" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg transition-all-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            开始分析图像
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 图像预览面板 -->
+                <div id="image-preview-container" class="bg-white rounded-xl p-6 shadow-lg hidden">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fa fa-image text-primary mr-2"></i>图像预览
+                    </h2>
+                    <div class="relative">
+                        <img id="image-preview" src="" alt="上传的图像预览" class="max-w-full max-h-64 mx-auto rounded-lg">
+                        <label for="file-input" class="absolute top-2 right-2 bg-white/80 hover:bg-white text-gray-700 p-2 rounded-full shadow transition-all-300 cursor-pointer">
+                            <i class="fa fa-refresh"></i>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 分析结果面板 -->
+                <div id="analysis-results" class="bg-white rounded-xl p-6 shadow-lg hidden">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fa fa-bar-chart text-primary mr-2"></i>图像分析结果
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="font-medium text-gray-700 mb-1">检测到的元素</h3>
+                            <div id="detected-elements" class="pl-4 space-y-1 max-h-40 overflow-y-auto"></div>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-700 mb-1">空间关系</h3>
+                            <div id="spatial-relations" class="pl-4 space-y-1 max-h-40 overflow-y-auto"></div>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-700 mb-1">尺寸与比例</h3>
+                            <div id="dimensions" class="pl-4 space-y-1"></div>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <button id="confirm-analysis-btn" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg transition-all-300">
+                            确认分析结果并继续
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 交互确认面板 -->
+                <div id="interaction-panel" class="bg-white rounded-xl p-6 shadow-lg hidden">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fa fa-comments text-primary mr-2"></i>确认与调整
+                    </h2>
+                    <div id="elements-adjustment" class="space-y-4 mb-6 max-h-60 overflow-y-auto"></div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">3D建模风格</label>
+                        <select id="modeling-style" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="simple">简约风格</option>
+                            <option value="detailed">详细风格</option>
+                            <option value="technical">技术风格</option>
+                        </select>
+                    </div>
+                    <div class="mt-6">
+                        <button id="generate-preview-btn" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg transition-all-300">
+                            生成3D预览
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 导出代码面板 -->
+                <div id="export-panel" class="bg-white rounded-xl p-6 shadow-lg hidden">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fa fa-code text-primary mr-2"></i>导出Blender代码
+                    </h2>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">代码格式</label>
+                        <select id="code-format" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="blender-python">Blender Python脚本 (.py)</option>
+                            <option value="json">JSON数据 (.json)</option>
+                        </select>
+                    </div>
+                    <div class="space-y-3 mt-6">
+                        <button id="export-code-btn" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg transition-all-300 flex items-center justify-center">
+                            <i class="fa fa-download mr-2"></i> 下载代码
+                        </button>
+                        <button id="copy-code-btn" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-lg transition-all-300 flex items-center justify-center">
+                            <i class="fa fa-copy mr-2"></i> 复制代码
+                        </button>
+                        <!-- 添加直接发送到Blender的按钮 -->
+                        <button id="send-to-blender-btn" class="w-full bg-secondary hover:bg-secondary/90 text-white px-6 py-3 rounded-lg transition-all-300 flex items-center justify-center">
+                            <i class="fa fa-plug mr-2"></i> 发送到Blender
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧主区域 -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- 3D预览区域 -->
+                <div id="preview-container" class="bg-white rounded-xl p-6 shadow-lg h-[500px] hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold flex items-center">
+                            <i class="fa fa-eye text-primary mr-2"></i>3D模型预览
+                        </h2>
+                        <div class="flex space-x-2">
+                            <button id="rotate-toggle" class="bg-gray-100 hover:bg-gray-200 p-2 rounded transition-all-300" title="自动旋转">
+                                <i class="fa fa-refresh"></i>
+                            </button>
+                            <button id="reset-view" class="bg-gray-100 hover:bg-gray-200 p-2 rounded transition-all-300" title="重置视图">
+                                <i class="fa fa-undo"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="relative w-full h-[calc(100%-40px)] bg-gray-100 rounded-lg overflow-hidden">
+                        <canvas id="preview-canvas" class="w-full h-full"></canvas>
+                        <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center bg-white/70 hidden">
+                            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 代码展示区域 -->
+                <div id="code-container" class="bg-white rounded-xl p-6 shadow-lg hidden">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fa fa-code text-primary mr-2"></i>Blender Python代码
+                    </h2>
+                    <div class="bg-gray-900 text-gray-100 rounded-lg p-4 h-[400px] overflow-auto font-mono text-sm">
+                        <pre id="code-display"><code># Blender 4.0 脚本将在这里显示
+# 点击"下载代码"按钮导出完整脚本</code></pre>
+                    </div>
+                    <!-- 添加Blender API快速链接 -->
+                    <div class="mt-4 text-sm text-gray-600 flex flex-wrap gap-3">
+                        <a href="https://docs.blender.org/api/4.0/" target="_blank" class="text-primary hover:underline flex items-center">
+                            <i class="fa fa-external-link mr-1"></i> Blender 4.0 API文档
+                        </a>
+                        <a href="https://docs.blender.org/api/4.0/bpy.ops.html" target="_blank" class="text-primary hover:underline flex items-center">
+                            <i class="fa fa-external-link mr-1"></i> 操作函数参考
+                        </a>
+                        <a href="https://docs.blender.org/api/4.0/bpy.types.html" target="_blank" class="text-primary hover:underline flex items-center">
+                            <i class="fa fa-external-link mr-1"></i> 类型定义参考
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 初始欢迎区域 -->
+                <div id="welcome-panel" class="lg:col-span-2 bg-white rounded-xl p-8 shadow-lg text-center">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-6">
+                        <i class="fa fa-cube text-2xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold mb-4">欢迎使用图像转3D建模工具</h2>
+                    <p class="text-gray-600 mb-8 max-w-2xl mx-auto">
+                        上传流程图、工艺图、脑图或工程图，我们将分析图像内容并转换为3D模型，
+                        最终生成可直接在Blender 4.0中使用的代码。
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <i class="fa fa-upload text-primary text-xl mb-2"></i>
+                            <h3 class="font-medium mb-1">上传图像</h3>
+                            <p class="text-sm text-gray-500">支持多种工程图纸格式</p>
+                        </div>
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <i class="fa fa-magic text-primary text-xl mb-2"></i>
+                            <h3 class="font-medium mb-1">智能分析</h3>
+                            <p class="text-sm text-gray-500">识别几何元素和空间关系</p>
+                        </div>
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <i class="fa fa-code text-primary text-xl mb-2"></i>
+                            <h3 class="font-medium mb-1">导出代码</h3>
+                            <p class="text-sm text-gray-500">生成Blender兼容的Python脚本</p>
+                        </div>
+                    </div>
+                    <!-- 添加Blender API入口 -->
+                    <div class="mt-8">
+                        <a href="https://docs.blender.org/api/4.0/" target="_blank" class="inline-flex items-center bg-accent hover:bg-accent/90 text-white px-6 py-3 rounded-lg transition-all-300">
+                            <i class="fa fa-book mr-2"></i> 查看Blender 4.0 API文档
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Blender连接状态指示器 -->
+    <div id="blender-connection-status" class="fixed bottom-6 left-6 px-4 py-2 rounded-lg shadow-lg bg-gray-800 text-white text-sm hidden">
+        <i id="connection-icon" class="fa fa-plug mr-2"></i>
+        <span id="connection-text">未连接到Blender</span>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-neutral text-white py-8 mt-12">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-cube mr-2"></i>图像转3D建模工具
+                    </h3>
+                    <p class="text-gray-400 text-sm">
+                        将2D工程图纸转换为3D模型，自动生成Blender兼容代码
+                    </p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">快速链接</h3>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#" class="hover:text-white transition-all-300">使用指南</a></li>
+                        <li><a href="https://docs.blender.org/api/4.0/" target="_blank" class="hover:text-white transition-all-300">Blender API文档</a></li>
+                        <li><a href="#" class="hover:text-white transition-all-300">常见问题</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">相关资源</h3>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="https://github.com/lucy5238/image-to-3d-analyzer.git" target="_blank" class="hover:text-white transition-all-300">
+                            <i class="fa fa-github mr-1"></i> 项目源码
+                        </a></li>
+                        <li><a href="https://www.blender.org/" target="_blank" class="hover:text-white transition-all-300">
+                            <i class="fa fa-external-link mr-1"></i> Blender官网
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-6 pt-6 text-center text-gray-500 text-sm">
+                &copy; 2023 图像转3D建模工具 | 为Blender设计
+            </div>
+        </div>
+    </footer>
+
+    <!-- 通知提示框 -->
+    <div id="notification" class="fixed bottom-6 right-6 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all-300 flex items-center max-w-sm">
+        <i id="notification-icon" class="mr-3 text-xl"></i>
+        <p id="notification-message"></p>
+    </div>
+
+    <!-- 主脚本 -->
+    <script>
+        // 全局状态管理
+        const state = {
+            currentStep: 1,
+            uploadedImage: null,
+            imageType: 'flowchart',
+            analysisResults: null,
+            3dModelData: null,
+            blenderCode: null,
+            isAutoRotating: false,
+            threeJsScene: null,
+            blenderConnection: null, // 存储Blender连接状态
+        };
+
+        // DOM元素
+        const elements = {
+            // 新增Blender相关元素
+            connectBlenderBtn: document.getElementById('connect-blender-btn'),
+            sendToBlenderBtn: document.getElementById('send-to-blender-btn'),
+            blenderConnectionStatus: document.getElementById('blender-connection-status'),
+            connectionIcon: document.getElementById('connection-icon'),
+            connectionText: document.getElementById('connection-text'),
+            
+            // 步骤相关
+            progressBars: {
+                '1-2': document.getElementById('progress-1-2'),
+                '2-3': document.getElementById('progress-2-3'),
+                '3-4': document.getElementById('progress-3-4'),
+                '4-5': document.getElementById('progress-4-5')
+            },
+            steps: {
+                upload: document.getElementById('step-upload'),
+                analysis: document.getElementById('analysis-results'),
+                interaction: document.getElementById('interaction-panel'),
+                preview: document.getElementById('preview-container'),
+                export: document.getElementById('export-panel'),
+                code: document.getElementById('code-container'),
+                welcome: document.getElementById('welcome-panel'),
+                imagePreview: document.getElementById('image-preview-container')
+            },
+            
+            // 上传相关
+            dropArea: document.getElementById('drop-area'),
+            fileInput: document.getElementById('file-input'),
+            imagePreview: document.getElementById('image-preview'),
+            imageType: document.getElementById('image-type'),
+            analyzeBtn: document.getElementById('analyze-btn'),
+            
+            // 分析结果相关
+            detectedElements: document.getElementById('detected-elements'),
+            spatialRelations: document.getElementById('spatial-relations'),
+            dimensions: document.getElementById('dimensions'),
+            confirmAnalysisBtn: document.getElementById('confirm-analysis-btn'),
+            
+            // 交互确认相关
+            elementsAdjustment: document.getElementById('elements-adjustment'),
+            modelingStyle: document.getElementById('modeling-style'),
+            generatePreviewBtn: document.getElementById('generate-preview-btn'),
+            
+            // 3D预览相关
+            previewCanvas: document.getElementById('preview-canvas'),
+            rotateToggle: document.getElementById('rotate-toggle'),
+            resetView: document.getElementById('reset-view'),
+            loadingIndicator: document.getElementById('loading-indicator'),
+            
+            // 导出代码相关
+            codeFormat: document.getElementById('code-format'),
+            exportCodeBtn: document.getElementById('export-code-btn'),
+            copyCodeBtn: document.getElementById('copy-code-btn'),
+            codeDisplay: document.getElementById('code-display'),
+            
+            // 通知相关
+            notification: document.getElementById('notification'),
+            notificationIcon: document.getElementById('notification-icon'),
+            notificationMessage: document.getElementById('notification-message')
+        };
+
+        // 初始化函数
+        function init() {
+            bindEventListeners();
+            checkBlenderConnectionSupport();
+        }
+
+        // 绑定事件监听器
+        function bindEventListeners() {
+            // 新增Blender相关事件
+            elements.connectBlenderBtn.addEventListener('click', connectToBlender);
+            elements.sendToBlenderBtn.addEventListener('click', sendCodeToBlender);
+            
+            // 上传区域事件
+            elements.dropArea.addEventListener('click', (e) => {
+                if (e.target !== elements.fileInput) {
+                    elements.fileInput.click();
+                }
+            });
+            elements.dropArea.addEventListener('dragover', handleDragOver);
+            elements.dropArea.addEventListener('drop', handleDrop);
+            elements.fileInput.addEventListener('change', handleFileSelect);
+            elements.imageType.addEventListener('change', (e) => {
+                state.imageType = e.target.value;
+            });
+            elements.analyzeBtn.addEventListener('click', startImageAnalysis);
+            
+            // 分析结果事件
+            elements.confirmAnalysisBtn.addEventListener('click', () => goToStep(3));
+            
+            // 交互确认事件
+            elements.generatePreviewBtn.addEventListener('click', generate3DPreview);
+            
+            // 3D预览控制事件
+            elements.rotateToggle.addEventListener('click', toggleAutoRotation);
+            elements.resetView.addEventListener('click', reset3DView);
+            
+            // 导出代码事件
+            elements.exportCodeBtn.addEventListener('click', exportCode);
+            elements.copyCodeBtn.addEventListener('click', copyCodeToClipboard);
+        }
+
+        // 检查Blender连接支持
+        function checkBlenderConnectionSupport() {
+            // 显示连接状态指示器
+            elements.blenderConnectionStatus.classList.remove('hidden');
+            
+            // 检查是否支持WebSocket（Blender连接需要）
+            if (!window.WebSocket) {
+                updateBlenderConnectionStatus(false, "浏览器不支持WebSocket");
+                elements.connectBlenderBtn.disabled = true;
+                elements.sendToBlenderBtn.disabled = true;
+            }
+        }
+
+        // 更新Blender连接状态
+        function updateBlenderConnectionStatus(connected, message) {
+            if (connected) {
+                elements.connectionIcon.className = "fa fa-plug mr-2 text-green-400";
+                elements.connectionText.textContent = message || "已连接到Blender";
+                elements.blenderConnectionStatus.classList.add('bg-green-900/80');
+                elements.blenderConnectionStatus.classList.remove('bg-gray-800');
+            } else {
+                elements.connectionIcon.className = "fa fa-plug mr-2 text-red-400";
+                elements.connectionText.textContent = message || "未连接到Blender";
+                elements.blenderConnectionStatus.classList.remove('bg-green-900/80');
+                elements.blenderConnectionStatus.classList.add('bg-gray-800');
+            }
+        }
+
+        // 连接到本地Blender
+        function connectToBlender() {
+            // Blender默认WebSocket端口为8080
+            const blenderPort = 8080;
+            
+            // 显示加载状态
+            elements.loadingIndicator.classList.remove('hidden');
+            elements.loadingIndicator.style.position = 'fixed';
+            elements.loadingIndicator.style.zIndex = '1000';
+            
+            // 尝试连接到本地Blender实例
+            try {
+                // 关闭现有连接
+                if (state.blenderConnection && state.blenderConnection.readyState === WebSocket.OPEN) {
+                    state.blenderConnection.close();
+                }
+                
+                // 创建新连接
+                state.blenderConnection = new WebSocket(`ws://localhost:${blenderPort}/ws`);
+                
+                // 连接成功
+                state.blenderConnection.onopen = () => {
+                    elements.loadingIndicator.classList.add('hidden');
+                    updateBlenderConnectionStatus(true);
+                    showNotification('已成功连接到Blender', 'success');
+                };
+                
+                // 接收消息
+                state.blenderConnection.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'result') {
+                            showNotification(`Blender: ${data.message}`, 'info');
+                        }
+                    } catch (e) {
+                        showNotification(`收到Blender消息: ${event.data}`, 'info');
+                    }
+                };
+                
+                // 连接关闭
+                state.blenderConnection.onclose = () => {
+                    updateBlenderConnectionStatus(false, '已断开与Blender的连接');
+                    showNotification('与Blender的连接已断开', 'error');
+                };
+                
+                // 连接错误
+                state.blenderConnection.onerror = (error) => {
+                    elements.loadingIndicator.classList.add('hidden');
+                    updateBlenderConnectionStatus(false, '连接Blender失败');
+                    showNotification('无法连接到Blender，请确保Blender已启动并启用了WebSocket服务器', 'error');
+                };
+            } catch (error) {
+                elements.loadingIndicator.classList.add('hidden');
+                updateBlenderConnectionStatus(false, '连接失败');
+                showNotification(`连接Blender时出错: ${error.message}`, 'error');
+            }
+        }
+
+        // 将代码发送到Blender
+        function sendCodeToBlender() {
+            if (!state.blenderCode) {
+                state.blenderCode = generateBlenderCode();
+                elements.codeDisplay.textContent = state.blenderCode;
+            }
+            
+            // 检查连接状态
+            if (!state.blenderConnection || state.blenderConnection.readyState !== WebSocket.OPEN) {
+                showNotification('请先连接到Blender', 'error');
+                connectToBlender(); // 尝试自动连接
+                return;
+            }
+            
+            // 显示加载状态
+            elements.loadingIndicator.classList.remove('hidden');
+            
+            // 发送代码到Blender
+            try {
+                state.blenderConnection.send(JSON.stringify({
+                    type: 'execute_python',
+                    code: state.blenderCode
+                }));
+                
+                // 发送成功
+                setTimeout(() => {
+                    elements.loadingIndicator.classList.add('hidden');
+                    showNotification('代码已发送到Blender执行', 'success');
+                }, 1000);
+            } catch (error) {
+                elements.loadingIndicator.classList.add('hidden');
+                showNotification(`发送代码失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 处理拖放事件
+        function handleDragOver(e) {
+            e.preventDefault();
+            elements.dropArea.classList.add('border-primary');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            elements.dropArea.classList.remove('border-primary');
+            
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        }
+
+        // 处理文件选择
+        function handleFileSelect(e) {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        }
+
+        // 处理上传的文件
+        function handleFile(file) {
+            if (!file.type.match('image.*')) {
+                showNotification('请上传图像文件', 'error');
+                return;
+            }
+            
+            state.uploadedImage = file;
+            
+            // 显示预览
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                elements.imagePreview.src = e.target.result;
+                elements.steps.imagePreview.classList.remove('hidden');
+                elements.steps.welcome.classList.add('hidden');
+                elements.analyzeBtn.disabled = false;
+            };
+            reader.readAsDataURL(file);
+            
+            showNotification('图像上传成功', 'success');
+        }
+
+        // 开始图像分析
+        function startImageAnalysis() {
+            if (!state.uploadedImage) {
+                showNotification('请先上传图像', 'error');
+                return;
+            }
+            
+            // 显示加载状态
+            elements.loadingIndicator.classList.remove('hidden');
+            elements.loadingIndicator.style.position = 'fixed';
+            elements.loadingIndicator.style.zIndex = '1000';
+            
+            // 模拟图像分析过程
+            setTimeout(() => {
+                // 生成模拟分析结果
+                state.analysisResults = generateMockAnalysisResults();
+                
+                // 显示分析结果
+                displayAnalysisResults();
+                
+                // 隐藏加载状态
+                elements.loadingIndicator.classList.add('hidden');
+                
+                // 进入下一步
+                goToStep(2);
+                showNotification('图像分析完成', 'success');
+            }, 2000);
+        }
+
+        // 生成模拟分析结果
+        function generateMockAnalysisResults() {
+            const elementTypes = ['矩形', '圆形', '三角形', '线条', '文本框', '箭头'];
+            const relations = ['位于上方', '位于下方', '连接到', '包含', '平行于', '垂直于'];
+            
+            // 随机生成元素
+            const elementsCount = Math.floor(Math.random() * 5) + 3;
+            const elements = [];
+            for (let i = 0; i < elementsCount; i++) {
+                const type = elementTypes[Math.floor(Math.random() * elementTypes.length)];
+                elements.push({
+                    id: `elem-${i+1}`,
+                    type,
+                    label: `${type} ${i+1}`,
+                    position: {
+                        x: Math.floor(Math.random() * 100),
+                        y: Math.floor(Math.random() * 100)
+                    },
+                    size: {
+                        width: Math.floor(Math.random() * 30) + 10,
+                        height: Math.floor(Math.random() * 20) + 10
+                    },
+                    color: `rgb(${Math.floor(Math.random() * 100) + 100}, ${Math.floor(Math.random() * 100) + 100}, ${Math.floor(Math.random() * 100) + 100})`
+                });
+            }
+            
+            // 随机生成空间关系
+            const relationsCount = Math.floor(Math.random() * elementsCount) + 1;
+            const spatialRelations = [];
+            for (let i = 0; i < relationsCount; i++) {
+                const elem1 = elements[Math.floor(Math.random() * elements.length)];
+                let elem2 = elements[Math.floor(Math.random() * elements.length)];
+                
+                // 确保不是同一个元素
+                while (elem1.id === elem2.id) {
+                    elem2 = elements[Math.floor(Math.random() * elements.length)];
+                }
+                
+                const relation = relations[Math.floor(Math.random() * relations.length)];
+                spatialRelations.push({
+                    element1: elem1.id,
+                    element2: elem2.id,
+                    relation
+                });
+            }
+            
+            return {
+                elements,
+                spatialRelations,
+                dimensions: {
+                    width: 100,
+                    height: 100,
+                    scale: 1.0
+                }
+            };
+        }
+
+        // 显示分析结果
+        function displayAnalysisResults() {
+            if (!state.analysisResults) return;
+            
+            // 显示元素
+            elements.detectedElements.innerHTML = '';
+            state.analysisResults.elements.forEach(elem => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between';
+                item.innerHTML = `
+                    <span>${elem.label} (${elem.type})</span>
+                    <span class="w-3 h-3 rounded-full" style="background-color: ${elem.color}"></span>
+                `;
+                elements.detectedElements.appendChild(item);
+            });
+            
+            // 显示空间关系
+            elements.spatialRelations.innerHTML = '';
+            state.analysisResults.spatialRelations.forEach(rel => {
+                const elem1 = state.analysisResults.elements.find(e => e.id === rel.element1);
+                const elem2 = state.analysisResults.elements.find(e => e.id === rel.element2);
+                
+                const item = document.createElement('div');
+                item.textContent = `${elem1.label} ${rel.relation} ${elem2.label}`;
+                elements.spatialRelations.appendChild(item);
+            });
+            
+            // 显示尺寸
+            elements.dimensions.innerHTML = `
+                <div>宽度: ${state.analysisResults.dimensions.width} 单位</div>
+                <div>高度: ${state.analysisResults.dimensions.height} 单位</div>
+                <div>比例: ${state.analysisResults.dimensions.scale.toFixed(2)}</div>
+            `;
+            
+            // 准备交互调整面板
+            prepareInteractionPanel();
+        }
+
+        // 准备交互调整面板
+        function prepareInteractionPanel() {
+            if (!state.analysisResults) return;
+            
+            elements.elementsAdjustment.innerHTML = '';
+            
+            state.analysisResults.elements.forEach(elem => {
+                const item = document.createElement('div');
+                item.className = 'p-3 border border-gray-200 rounded-lg';
+                item.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center">
+                            <span class="w-3 h-3 rounded-full mr-2" style="background-color: ${elem.color}"></span>
+                            <span class="font-medium">${elem.label}</span>
+                        </div>
+                        <span class="text-sm text-gray-500">${elem.type}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                            <label class="block text-gray-500 mb-1">X 位置</label>
+                            <input type="number" value="${elem.position.x}" class="w-full p-1 border border-gray-300 rounded" 
+                                   data-element="${elem.id}" data-property="x">
+                        </div>
+                        <div>
+                            <label class="block text-gray-500 mb-1">Y 位置</label>
+                            <input type="number" value="${elem.position.y}" class="w-full p-1 border border-gray-300 rounded"
+                                   data-element="${elem.id}" data-property="y">
+                        </div>
+                        <div>
+                            <label class="block text-gray-500 mb-1">宽度</label>
+                            <input type="number" value="${elem.size.width}" class="w-full p-1 border border-gray-300 rounded"
+                                   data-element="${elem.id}" data-property="width">
+                        </div>
+                        <div>
+                            <label class="block text-gray-500 mb-1">高度</label>
+                            <input type="number" value="${elem.size.height}" class="w-full p-1 border border-gray-300 rounded"
+                                   data-element="${elem.id}" data-property="height">
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="block text-gray-500 mb-1 text-sm">Z 深度</label>
+                        <input type="number" value="${Math.floor(Math.random() * 5) + 1}" class="w-full p-1 border border-gray-300 rounded"
+                               data-element="${elem.id}" data-property="z">
+                    </div>
+                `;
+                elements.elementsAdjustment.appendChild(item);
+            });
+            
+            // 绑定输入框事件
+            document.querySelectorAll('[data-element]').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const elemId = e.target.dataset.element;
+                    const property = e.target.dataset.property;
+                    const value = parseFloat(e.target.value);
+                    
+                    // 更新分析结果中的值
+                    const element = state.analysisResults.elements.find(e => e.id === elemId);
+                    if (element) {
+                        if (property === 'x' || property === 'y') {
+                            element.position[property] = value;
+                        } else if (property === 'width' || property === 'height') {
+                            element.size[property] = value;
+                        } else if (property === 'z') {
+                            if (!element.position.z) element.position.z = 0;
+                            element.position.z = value;
+                        }
+                    }
+                });
+            });
+        }
+
+        // 生成3D预览
+        function generate3DPreview() {
+            if (!state.analysisResults) return;
+            
+            // 显示加载状态
+            elements.loadingIndicator.classList.remove('hidden');
+            
+            // 生成3D模型数据
+            state.3dModelData = generate3DModelData();
+            
+            // 初始化Three.js场景
+            initThreeJsScene();
+            
+            // 隐藏加载状态
+            elements.loadingIndicator.classList.add('hidden');
+            
+            // 进入下一步
+            goToStep(4);
+            showNotification('3D预览生成完成', 'success');
+        }
+
+        // 生成3D模型数据
+        function generate3DModelData() {
+            const modelData = {
+                objects: [],
+                materials: [],
+                camera: {
+                    position: { x: 150, y: 150, z: 150 },
+                    target: { x: 50, y: 50, z: 0 }
+                },
+                lights: [
+                    { type: 'ambient', intensity: 0.5 },
+                    { type: 'directional', position: { x: 100, y: 100, z: 100 }, intensity: 0.8 }
+                ]
+            };
+            
+            // 为每个元素创建3D对象
+            state.analysisResults.elements.forEach(elem => {
+                // 根据元素类型选择3D形状
+                let shapeType = 'box';
+                if (elem.type === '圆形') shapeType = 'cylinder';
+                if (elem.type === '三角形') shapeType = 'pyramid';
+                if (elem.type === '线条' || elem.type === '箭头') shapeType = 'line';
+                
+                // 创建材质
+                const materialId = `mat-${elem.id}`;
+                modelData.materials.push({
+                    id: materialId,
+                    color: elem.color,
+                    transparent: elem.type === '线条' || elem.type === '箭头' ? 0.7 : 1.0
+                });
+                
+                // 创建3D对象
+                modelData.objects.push({
+                    id: elem.id,
+                    name: elem.label,
+                    type: shapeType,
+                    position: {
+                        x: elem.position.x,
+                        y: elem.position.y,
+                        z: elem.position.z || 0
+                    },
+                    size: {
+                        width: elem.size.width,
+                        height: elem.size.height,
+                        depth: shapeType === 'line' ? 0.5 : 5
+                    },
+                    material: materialId
+                });
+            });
+            
+            // 添加连接线
+            state.analysisResults.spatialRelations.forEach((rel, index) => {
+                if (rel.relation === '连接到' || rel.relation === '包含') {
+                    const elem1 = state.analysisResults.elements.find(e => e.id === rel.element1);
+                    const elem2 = state.analysisResults.elements.find(e => e.id === rel.element2);
+                    
+                    const materialId = `mat-connector-${index}`;
+                    modelData.materials.push({
+                        id: materialId,
+                        color: 'rgb(100, 100, 100)',
+                        transparent: 0.8
+                    });
+                    
+                    modelData.objects.push({
+                        id: `connector-${index}`,
+                        name: `连接 ${elem1.label} 到 ${elem2.label}`,
+                        type: 'line',
+                        from: {
+                            x: elem1.position.x + elem1.size.width / 2,
+                            y: elem1.position.y + elem1.size.height / 2,
+                            z: (elem1.position.z || 0) + 2.5
+                        },
+                        to: {
+                            x: elem2.position.x + elem2.size.width / 2,
+                            y: elem2.position.y + elem2.size.height / 2,
+                            z: (elem2.position.z || 0) + 2.5
+                        },
+                        size: { width: 0.5 },
+                        material: materialId
+                    });
+                }
+            });
+            
+            return modelData;
+        }
+
+        // 初始化Three.js场景
+        function initThreeJsScene() {
+            if (!state.3dModelData) return;
+            
+            // 创建场景
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
+            
+            // 创建相机
+            const camera = new THREE.PerspectiveCamera(
+                75, 
+                elements.previewCanvas.clientWidth / elements.previewCanvas.clientHeight, 
+                0.1, 
+                1000
+            );
+            camera.position.set(
+                state.3dModelData.camera.position.x,
+                state.3dModelData.camera.position.y,
+                state.3dModelData.camera.position.z
+            );
+            
+            // 创建渲染器
+            const renderer = new THREE.WebGLRenderer({
+                canvas: elements.previewCanvas,
+                antialias: true
+            });
+            renderer.setSize(
+                elements.previewCanvas.clientWidth,
+                elements.previewCanvas.clientHeight
+            );
+            renderer.setPixelRatio(window.devicePixelRatio);
+            
+            // 添加灯光
+            state.3dModelData.lights.forEach(lightData => {
+                let light;
+                if (lightData.type === 'ambient') {
+                    light = new THREE.AmbientLight(0xffffff, lightData.intensity);
+                } else if (lightData.type === 'directional') {
+                    light = new THREE.DirectionalLight(0xffffff, lightData.intensity);
+                    light.position.set(
+                        lightData.position.x,
+                        lightData.position.y,
+                        lightData.position.z
+                    );
+                }
+                scene.add(light);
+            });
+            
+            // 创建材质映射
+            const materials = {};
+            state.3dModelData.materials.forEach(matData => {
+                const material = new THREE.MeshStandardMaterial({
+                    color: matData.color,
+                    transparent: matData.transparent < 1.0,
+                    opacity: matData.transparent
+                });
+                materials[matData.id] = material;
+            });
+            
+            // 添加3D对象
+            state.3dModelData.objects.forEach(objData => {
+                let geometry, mesh;
+                
+                if (objData.type === 'box') {
+                    geometry = new THREE.BoxGeometry(
+                        objData.size.width,
+                        objData.size.depth,
+                        objData.size.height
+                    );
+                    mesh = new THREE.Mesh(geometry, materials[objData.material]);
+                    mesh.position.set(
+                        objData.position.x,
+                        objData.position.z,
+                        objData.position.y
+                    );
+                    scene.add(mesh);
+                } 
+                else if (objData.type === 'cylinder') {
+                    geometry = new THREE.CylinderGeometry(
+                        objData.size.width / 2,
+                        objData.size.width / 2,
+                        objData.size.depth,
+                        32
+                    );
+                    mesh = new THREE.Mesh(geometry, materials[objData.material]);
+                    mesh.position.set(
+                        objData.position.x + objData.size.width / 2,
+                        objData.position.z,
+                        objData.position.y + objData.size.height / 2
+                    );
+                    mesh.rotation.x = Math.PI / 2;
+                    scene.add(mesh);
+                }
+                else if (objData.type === 'pyramid') {
+                    geometry = new THREE.ConeGeometry(
+                        objData.size.width / 2,
+                        objData.size.depth,
+                        3
+                    );
+                    mesh = new THREE.Mesh(geometry, materials[objData.material]);
+                    mesh.position.set(
+                        objData.position.x + objData.size.width / 2,
+                        objData.position.z + objData.size.depth / 2,
+                        objData.position.y + objData.size.height / 2
+                    );
+                    mesh.rotation.x = Math.PI / 2;
+                    scene.add(mesh);
+                }
+                else if (objData.type === 'line') {
+                    // 创建线条几何体
+                    const points = [];
+                    points.push(new THREE.Vector3(
+                        objData.from.x,
+                        objData.from.z,
+                        objData.from.y
+                    ));
+                    points.push(new THREE.Vector3(
+                        objData.to.x,
+                        objData.to.z,
+                        objData.to.y
+                    ));
+                    
+                    geometry = new THREE.BufferGeometry().setFromPoints(points);
+                    const line = new THREE.Line(
+                        geometry,
+                        new THREE.LineBasicMaterial({
+                            color: materials[objData.material].color,
+                            linewidth: objData.size.width
+                        })
+                    );
+                    scene.add(line);
+                }
+            });
+            
+            // 添加轨道控制器
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(
+                state.3dModelData.camera.target.x,
+                state.3dModelData.camera.target.z,
+                state.3dModelData.camera.target.y
+            );
+            controls.update();
+            
+            // 保存场景状态
+            state.threeJsScene = {
+                scene,
+                camera,
+                renderer,
+                controls,
+                animationId: null
+            };
+            
+            // 渲染场景
+            function animate() {
+                state.threeJsScene.animationId = requestAnimationFrame(animate);
+                
+                // 如果自动旋转开启，则旋转场景
+                if (state.isAutoRotating) {
+                    state.threeJsScene.scene.rotation.y += 0.005;
+                }
+                
+                state.threeJsScene.renderer.render(
+                    state.threeJsScene.scene, 
+                    state.threeJsScene.camera
+                );
+            }
+            
+            animate();
+            
+            // 监听窗口大小变化
+            window.addEventListener('resize', () => {
+                const width = elements.previewCanvas.clientWidth;
+                const height = elements.previewCanvas.clientHeight;
+                
+                state.threeJsScene.camera.aspect = width / height;
+                state.threeJsScene.camera.updateProjectionMatrix();
+                state.threeJsScene.renderer.setSize(width, height);
+            });
+        }
+
+        // 切换自动旋转
+        function toggleAutoRotation() {
+            state.isAutoRotating = !state.isAutoRotating;
+            elements.rotateToggle.classList.toggle('text-primary', state.isAutoRotating);
+        }
+
+        // 重置3D视图
+        function reset3DView() {
+            if (!state.threeJsScene || !state.3dModelData) return;
+            
+            state.threeJsScene.camera.position.set(
+                state.3dModelData.camera.position.x,
+                state.3dModelData.camera.position.y,
+                state.3dModelData.camera.position.z
+            );
+            
+            state.threeJsScene.controls.target.set(
+                state.3dModelData.camera.target.x,
+                state.3dModelData.camera.target.z,
+                state.3dModelData.camera.target.y
+            );
+            
+            state.threeJsScene.controls.update();
+            state.isAutoRotating = false;
+            elements.rotateToggle.classList.remove('text-primary');
+        }
+
+        // 生成Blender代码
+        function generateBlenderCode() {
+            if (!state.3dModelData) return '';
+            
+            // 开始构建代码
+            let code = `import bpy
+import math
+from mathutils import Vector
+
+# 清除默认对象
+bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.delete()
+
+`;
+            
+            // 添加材质
+            state.3dModelData.materials.forEach(matData => {
+                // 转换RGB颜色为0-1范围
+                const rgb = matData.color.match(/\d+/g).map(x => parseInt(x) / 255);
+                
+                code += `# 材质: ${matData.id}
+${matData.id} = bpy.data.materials.new(name="${matData.id}")
+${matData.id}.use_nodes = True
+principled_bsdf = ${matData.id}.node_tree.nodes.get('Principled BSDF')
+principled_bsdf.inputs['Base Color'].default_value = (${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${matData.transparent})
+principled_bsdf.inputs['Roughness'].default_value = 0.5
+output_node = ${matData.id}.node_tree.nodes.get('Material Output')
+${matData.id}.node_tree.links.new(principled_bsdf.outputs['BSDF'], output_node.inputs['Surface'])
+
+`;
+            });
+            
+            // 添加对象
+            state.3dModelData.objects.forEach(objData => {
+                code += `# 创建对象: ${objData.name}\n`;
+                
+                if (objData.type === 'box') {
+                    // 创建立方体
+                    code += `bpy.ops.mesh.primitive_cube_add(size=1, location=(${objData.position.x}, ${objData.position.y}, ${objData.position.z}))
+obj = bpy.context.active_object
+obj.name = "${objData.id}"
+obj.dimensions = (${objData.size.width}, ${objData.size.height}, ${objData.size.depth})
+
+`;
+                }
+                else if (objData.type === 'cylinder') {
+                    // 创建圆柱体
+                    code += `bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=${objData.size.width / 2}, depth=${objData.size.depth}, location=(${objData.position.x + objData.size.width / 2}, ${objData.position.y + objData.size.height / 2}, ${objData.position.z}))
+obj = bpy.context.active_object
+obj.name = "${objData.id}"
+
+`;
+                }
+                else if (objData.type === 'pyramid') {
+                    // 创建金字塔
+                    code += `bpy.ops.mesh.primitive_cone_add(vertices=3, radius1=${objData.size.width / 2}, depth=${objData.size.depth}, location=(${objData.position.x + objData.size.width / 2}, ${objData.position.y + objData.size.height / 2}, ${objData.position.z + objData.size.depth / 2}))
+obj = bpy.context.active_object
+obj.name = "${objData.id}"
+
+`;
+                }
+                else if (objData.type === 'line') {
+                    // 创建线条
+                    code += `# 创建线条
+curve_data = bpy.data.curves.new(name="${objData.id}", type='CURVE')
+curve_data.dimensions = '3D'
+curve_data.bevel_depth = ${objData.size.width / 4}  # 线条粗细
+
+polyline = curve_data.splines.new('POLY')
+polyline.points.add(1)  # 添加一个点，总共2个点
+polyline.points[0].co = (${objData.from.x}, ${objData.from.y}, ${objData.from.z}, 1)
+polyline.points[1].co = (${objData.to.x}, ${objData.to.y}, ${objData.to.z}, 1)
+
+obj = bpy.data.objects.new("Line", curve_data)
+bpy.context.collection.objects.link(obj)
+
+`;
+                }
+                
+                // 分配材质
+                code += `# 分配材质
+if "${objData.material}" in bpy.data.materials:
+    if obj.data.materials:
+        obj.data.materials[0] = bpy.data.materials["${objData.material}"]
+    else:
+        obj.data.materials.append(bpy.data.materials["${objData.material}"])
+
+`;
+            });
+            
+            // 添加相机和灯光
+            code += `# 创建相机
+bpy.ops.object.camera_add(location=(${state.3dModelData.camera.position.x}, ${state.3dModelData.camera.position.y}, ${state.3dModelData.camera.position.z}))
+camera = bpy.context.active_object
+camera.name = "Camera"
+
+# 创建环境光
+bpy.ops.object.light_add(type='AMBIENT', location=(50, 50, 100))
+ambient_light = bpy.context.active_object
+ambient_light.data.energy = 0.5
+
+# 设置渲染参数
+bpy.context.scene.render.engine = 'CYCLES'
+bpy.context.scene.cycles.samples = 128
+
+print("3D模型生成完成")
+`;
+            
+            return code;
+        }
+
+        // 导出代码
+        function exportCode() {
+            if (!state.blenderCode) {
+                state.blenderCode = generateBlenderCode();
+                elements.codeDisplay.textContent = state.blenderCode;
+            }
+            
+            const format = elements.codeFormat.value;
+            
+            if (format === 'blender-python') {
+                // 导出Python脚本
+                const blob = new Blob([state.blenderCode], { type: 'text/python' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'image_to_3d_model.py';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+            
+            if (format === 'json') {
+                // 导出JSON数据
+                const jsonData = JSON.stringify(state.3dModelData, null, 2);
+                const blob = new Blob([jsonData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '3d_model_data.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+            
+            showNotification('代码导出成功', 'success');
+        }
+
+        // 复制代码到剪贴板
+        function copyCodeToClipboard() {
+            if (!state.blenderCode) {
+                state.blenderCode = generateBlenderCode();
+                elements.codeDisplay.textContent = state.blenderCode;
+            }
+            
+            navigator.clipboard.writeText(state.blenderCode)
+                .then(() => {
+                    showNotification('代码已复制到剪贴板', 'success');
+                })
+                .catch(err => {
+                    showNotification('复制失败，请手动复制', 'error');
+                });
+        }
+
+        // 步骤导航
+        function goToStep(step) {
+            // 更新进度条
+            if (step > 1) elements.progressBars['1-2'].style.width = '100%';
+            else elements.progressBars['1-2'].style.width = '0%';
+            
+            if (step > 2) elements.progressBars['2-3'].style.width = '100%';
+            else elements.progressBars['2-3'].style.width = '0%';
+            
+            if (step > 3) elements.progressBars['3-4'].style.width = '100%';
+            else elements.progressBars['3-4'].style.width = '0%';
+            
+            if (step > 4) elements.progressBars['4-5'].style.width = '100%';
+            else elements.progressBars['4-5'].style.width = '0%';
+            
+            // 隐藏所有步骤
+            Object.values(elements.steps).forEach(el => el.classList.add('hidden'));
+            
+            // 显示当前步骤
+            switch(step) {
+                case 1:
+                    elements.steps.upload.classList.remove('hidden');
+                    if (state.uploadedImage) {
+                        elements.steps.imagePreview.classList.remove('hidden');
+                    } else {
+                        elements.steps.welcome.classList.remove('hidden');
+                    }
+                    break;
+                case 2:
+                    elements.steps.analysis.classList.remove('hidden');
+                    elements.steps.imagePreview.classList.remove('hidden');
+                    break;
+                case 3:
+                    elements.steps.interaction.classList.remove('hidden');
+                    elements.steps.imagePreview.classList.remove('hidden');
+                    break;
+                case 4:
+                    elements.steps.preview.classList.remove('hidden');
+                    break;
+                case 5:
+                    elements.steps.preview.classList.remove('hidden');
+                    elements.steps.export.classList.remove('hidden');
+                    elements.steps.code.classList.remove('hidden');
+                    
+                    // 生成Blender代码
+                    if (!state.blenderCode) {
+                        state.blenderCode = generateBlenderCode();
+                        elements.codeDisplay.textContent = state.blenderCode;
+                    }
+                    break;
+            }
+            
+            // 更新当前步骤
+            state.currentStep = step;
+            
+            // 更新步骤指示器样式
+            document.querySelectorAll('.rounded-full.border-2').forEach((el, index) => {
+                if (index + 1 < step) {
+                    el.className = 'w-10 h-10 rounded-full border-2 step-completed flex items-center justify-center mb-2';
+                    el.innerHTML = '<i class="fa fa-check"></i>';
+                } else if (index + 1 === step) {
+                    el.className = 'w-10 h-10 rounded-full border-2 step-active flex items-center justify-center mb-2';
+                } else {
+                    el.className = 'w-10 h-10 rounded-full border-2 step-pending flex items-center justify-center mb-2';
+                }
+            });
+        }
+
+        // 显示通知
+        function showNotification(message, type = 'info') {
+            const iconClass = type === 'success' ? 'fa-check-circle text-green-500' :
+                             type === 'error' ? 'fa-exclamation-circle text-red-500' :
+                             'fa-info-circle text-blue-500';
+            
+            elements.notificationIcon.className = `mr-3 text-xl ${iconClass}`;
+            elements.notificationMessage.textContent = message;
+            elements.notification.className = 'fixed bottom-6 right-6 px-6 py-3 rounded-lg shadow-lg transform translate-y-0 opacity-100 transition-all-300 flex items-center max-w-sm bg-white';
+            
+            // 3秒后隐藏通知
+            setTimeout(() => {
+                elements.notification.className = 'fixed bottom-6 right-6 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all-300 flex items-center max-w-sm';
+            }, 3000);
+        }
+
+        // 初始化应用
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
+    
